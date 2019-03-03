@@ -115,9 +115,9 @@ impl RawUpdateBuilder {
         let removed_documents = {
             let mut document_ids = Vec::new();
             for (id, update_type) in self.documents_update {
-                if update_type == Deleted {
-                    document_ids.push(id);
-                }
+                // we remove the updated documents to have a fresh update
+                // without the old document fields values
+                document_ids.push(id);
             }
 
             document_ids.sort_unstable();
@@ -141,11 +141,9 @@ impl RawUpdateBuilder {
 
         // === index ===
 
-        if !removed_documents.is_empty() {
-            // remove the documents using the appropriate IndexEvent
-            let event_bytes = WriteIndexEvent::RemovedDocuments(&removed_documents).into_bytes();
-            self.batch.merge(DATA_INDEX, &event_bytes)?;
-        }
+        // remove the documents using the appropriate IndexEvent
+        let event_bytes = WriteIndexEvent::RemovedDocuments(&removed_documents).into_bytes();
+        self.batch.merge(DATA_INDEX, &event_bytes)?;
 
         // update the documents using the appropriate IndexEvent
         let event_bytes = WriteIndexEvent::UpdatedDocuments(&index).into_bytes();
