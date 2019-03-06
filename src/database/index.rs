@@ -5,6 +5,7 @@ use fst::{map, Map, IntoStreamer, Streamer};
 use fst::raw::Fst;
 use sdset::duo::{Union, DifferenceByKey};
 use sdset::{Set, SetOperation};
+use log::info;
 
 use crate::shared_data_cursor::{SharedDataCursor, FromSharedDataCursor};
 use crate::write_to_bytes::WriteToBytes;
@@ -23,6 +24,8 @@ impl Index {
         let mut builder = IndexBuilder::new();
         let mut stream = self.into_stream();
 
+        info!("Index::remove_documents called!");
+
         while let Some((key, indexes)) = stream.next() {
             buffer.clear();
 
@@ -30,8 +33,10 @@ impl Index {
             op.extend_vec(&mut buffer);
 
             if !buffer.is_empty() {
+                info!("insert {:?} {:?}!", key, indexes);
                 let indexes = Set::new_unchecked(&buffer);
                 builder.insert(key, indexes).unwrap();
+
             }
         }
 

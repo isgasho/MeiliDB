@@ -172,7 +172,7 @@ impl<'a> DocumentUpdate<'a> {
     }
 
     pub fn remove(&mut self) -> Result<(), SerializerError> {
-        // a remove of the whole document is always done!
+        // a remove of the whole document is always done at the creation of this struct!
         Ok(())
     }
 
