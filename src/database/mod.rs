@@ -271,6 +271,7 @@ impl DatabaseIndex {
 
         let snapshot = Snapshot::new(self.db.clone());
         let view = Arc::new(DatabaseView::new(snapshot)?);
+        info!("ArcSwap done");
         self.view.store(view.clone());
 
         Ok(view)

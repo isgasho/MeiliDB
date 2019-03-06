@@ -36,7 +36,6 @@ impl Index {
                 info!("insert {:?} {:?}!", key, indexes);
                 let indexes = Set::new_unchecked(&buffer);
                 builder.insert(key, indexes).unwrap();
-
             }
         }
 
