@@ -5,6 +5,7 @@ use rocksdb::rocksdb::{Writable, WriteBatch};
 use hashbrown::HashMap;
 use sdset::{Set, SetBuf};
 use serde::Serialize;
+use log::info;
 
 use crate::database::document_key::{DocumentKey, DocumentKeyAttr};
 use crate::database::serde::serializer::Serializer;
@@ -111,7 +112,9 @@ impl RawUpdateBuilder {
             // without the old document fields values
             let mut document_ids: Vec<_> = self.documents_update.into_iter().collect();
 
+
             document_ids.sort_unstable();
+            info!("removed_documents: {:?}", document_ids);
             let setbuf = SetBuf::new_unchecked(document_ids);
             DocIds::new(&setbuf)
         };
