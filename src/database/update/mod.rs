@@ -2,7 +2,7 @@ use std::collections::{HashSet, BTreeMap};
 use std::error::Error;
 
 use rocksdb::rocksdb::{Writable, WriteBatch};
-use hashbrown::hash_map::HashMap;
+use hashbrown::HashMap;
 use sdset::{Set, SetBuf};
 use serde::Serialize;
 
@@ -83,7 +83,7 @@ enum UpdateType {
 use UpdateType::{Updated, Deleted};
 
 pub struct RawUpdateBuilder {
-    documents_update: HashMap<DocumentId, UpdateType>,
+    documents_update: hashbrown::HashSet<DocumentId>,
     documents_ranked_fields: RankedMap,
     indexed_words: BTreeMap<Token, Vec<DocIndex>>,
     batch: WriteBatch,
@@ -92,7 +92,7 @@ pub struct RawUpdateBuilder {
 impl RawUpdateBuilder {
     pub fn new() -> RawUpdateBuilder {
         RawUpdateBuilder {
-            documents_update: HashMap::new(),
+            documents_update: hashbrown::HashSet::new(),
             documents_ranked_fields: HashMap::new(),
             indexed_words: BTreeMap::new(),
             batch: WriteBatch::new(),
@@ -100,25 +100,16 @@ impl RawUpdateBuilder {
     }
 
     pub fn document_update(&mut self, document_id: DocumentId) -> Result<DocumentUpdate, SerializerError> {
-        use serde::ser::Error;
-
-        match self.documents_update.get(&document_id) {
-            Some(Deleted) | None => Ok(DocumentUpdate { document_id, inner: self }),
-            Some(Updated) => Err(SerializerError::custom(
-                "This document has already been removed and cannot be updated in the same update"
-            )),
-        }
+        self.documents_update.insert(document_id);
+        DocumentUpdate::new(document_id, self)
     }
 
     pub fn build(self) -> Result<WriteBatch, Box<Error>> {
         // create the list of all the removed documents
         let removed_documents = {
-            let mut document_ids = Vec::new();
-            for (id, update_type) in self.documents_update {
-                // we remove the updated documents to have a fresh update
-                // without the old document fields values
-                document_ids.push(id);
-            }
+            // we remove the updated documents to have a fresh update
+            // without the old document fields values
+            let mut document_ids: Vec<_> = self.documents_update.into_iter().collect();
 
             document_ids.sort_unstable();
             let setbuf = SetBuf::new_unchecked(document_ids);
@@ -151,11 +142,9 @@ impl RawUpdateBuilder {
 
         // === ranked map ===
 
-        if !removed_documents.is_empty() {
-            // update the ranked map using the appropriate RankedMapEvent
-            let event_bytes = WriteRankedMapEvent::RemovedDocuments(&removed_documents).into_bytes();
-            self.batch.merge(DATA_RANKED_MAP, &event_bytes)?;
-        }
+        // update the ranked map using the appropriate RankedMapEvent
+        let event_bytes = WriteRankedMapEvent::RemovedDocuments(&removed_documents).into_bytes();
+        self.batch.merge(DATA_RANKED_MAP, &event_bytes)?;
 
         // update the documents using the appropriate IndexEvent
         let event_bytes = WriteRankedMapEvent::UpdatedDocuments(&self.documents_ranked_fields).into_bytes();
@@ -171,31 +160,20 @@ pub struct DocumentUpdate<'a> {
 }
 
 impl<'a> DocumentUpdate<'a> {
+    pub fn new(document_id: DocumentId, inner: &'a mut RawUpdateBuilder) -> Result<DocumentUpdate, SerializerError> {
+        let start = DocumentKey::new(document_id).with_attribute_min();
+        let end = DocumentKey::new(document_id).with_attribute_max(); // FIXME max + 1
+        inner.batch.delete_range(start.as_ref(), end.as_ref())?;
+
+        Ok(DocumentUpdate { document_id, inner })
+    }
+
     pub fn remove(&mut self) -> Result<(), SerializerError> {
-        use serde::ser::Error;
-
-        if let Updated = self.inner.documents_update.entry(self.document_id).or_insert(Deleted) {
-            return Err(SerializerError::custom(
-                "This document has already been updated and cannot be removed in the same update"
-            ));
-        }
-
-        let start = DocumentKey::new(self.document_id).with_attribute_min();
-        let end = DocumentKey::new(self.document_id).with_attribute_max(); // FIXME max + 1
-        self.inner.batch.delete_range(start.as_ref(), end.as_ref())?;
-
+        // a remove of the whole document is always done!
         Ok(())
     }
 
     pub fn insert_attribute_value(&mut self, attr: SchemaAttr, value: &[u8]) -> Result<(), SerializerError> {
-        use serde::ser::Error;
-
-        if let Deleted = self.inner.documents_update.entry(self.document_id).or_insert(Updated) {
-            return Err(SerializerError::custom(
-                "This document has already been deleted and cannot be updated in the same update"
-            ));
-        }
-
         let key = DocumentKeyAttr::new(self.document_id, attr);
         self.inner.batch.put(key.as_ref(), &value)?;
 
@@ -203,14 +181,6 @@ impl<'a> DocumentUpdate<'a> {
     }
 
     pub fn insert_doc_index(&mut self, token: Token, doc_index: DocIndex) -> Result<(), SerializerError> {
-        use serde::ser::Error;
-
-        if let Deleted = self.inner.documents_update.entry(self.document_id).or_insert(Updated) {
-            return Err(SerializerError::custom(
-                "This document has already been deleted and cannot be updated in the same update"
-            ));
-        }
-
         self.inner.indexed_words.entry(token).or_insert_with(Vec::new).push(doc_index);
 
         Ok(())
@@ -222,14 +192,6 @@ impl<'a> DocumentUpdate<'a> {
         number: Number,
     ) -> Result<(), SerializerError>
     {
-        use serde::ser::Error;
-
-        if let Deleted = self.inner.documents_update.entry(self.document_id).or_insert(Updated) {
-            return Err(SerializerError::custom(
-                "This document has already been deleted, ranked attributes cannot be added in the same update"
-            ));
-        }
-
         self.inner.documents_ranked_fields.insert((self.document_id, attr), number);
 
         Ok(())
