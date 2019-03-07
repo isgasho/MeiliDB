@@ -46,6 +46,8 @@ impl Index {
         let mut builder = IndexBuilder::new();
         let mut stream = map::OpBuilder::new().add(&self.map).add(&other.map).union();
 
+        info!("Index::union called!");
+
         let mut buffer = Vec::new();
         while let Some((key, ivalues)) = stream.next() {
             buffer.clear();
@@ -71,6 +73,7 @@ impl Index {
             }
 
             if !buffer.is_empty() {
+                info!("insert {:?} {:?}!", key, buffer);
                 let indexes = Set::new_unchecked(&buffer);
                 builder.insert(key, indexes).unwrap();
             }
