@@ -281,6 +281,7 @@ impl DatabaseIndex {
         self.db.compact_range(None, None);
         self.db.flush(true)?;
 
+        info!("before creating DatabaseView");
         let snapshot = Snapshot::new(self.db.clone());
         let view = Arc::new(DatabaseView::new(snapshot)?);
         info!("ArcSwap done");
