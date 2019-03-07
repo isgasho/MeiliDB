@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use rayon::slice::ParallelSliceMut;
 use slice_group_by::{GroupByMut, LinearStrGroupBy};
-use hashbrown::{HashMap, HashSet};
+use hashbrown::hash_map::{HashMap, Entry};
 use fst::Streamer;
 use log::info;
 
@@ -63,10 +63,45 @@ fn split_whitespace_automatons(query: &str) -> Vec<DfaExt> {
 
 pub type FilterFunc = fn(DocumentId) -> bool;
 
+struct AttributesMap {
+    new_attrs: HashMap<u16, u16>,
+    old_attrs: HashMap<u16, u16>,
+}
+
+impl AttributesMap {
+    fn new() -> AttributesMap {
+        AttributesMap {
+            new_attrs: HashMap::new(),
+            old_attrs: HashMap::new(),
+        }
+    }
+
+    fn add(&mut self, attribute: u16) -> bool {
+        let new_attribute = self.new_attrs.len() as u16;
+
+        match self.new_attrs.entry(attribute) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(entry) => {
+                entry.insert(new_attribute);
+                self.old_attrs.insert(new_attribute, attribute);
+                true
+            },
+        }
+    }
+
+    fn get_new(&self, old_attribute: u16) -> Option<u16> {
+        self.new_attrs.get(&old_attribute).cloned()
+    }
+
+    fn get_old(&self, new_attribute: u16) -> Option<u16> {
+        self.old_attrs.get(&new_attribute).cloned()
+    }
+}
+
 pub struct QueryBuilder<'i, 'c, FI> {
     index: &'i Index,
     criteria: Criteria<'c>,
-    searchable_attrs: Option<HashSet<u16>>,
+    attributes_map: Option<AttributesMap>,
     filter: Option<FI>,
 }
 
@@ -76,7 +111,7 @@ impl<'i, 'c> QueryBuilder<'i, 'c, FilterFunc> {
     }
 
     pub fn with_criteria(index: &'i Index, criteria: Criteria<'c>) -> Self {
-        QueryBuilder { index, criteria, searchable_attrs: None, filter: None }
+        QueryBuilder { index, criteria, attributes_map: None, filter: None }
     }
 }
 
@@ -88,7 +123,7 @@ impl<'i, 'c, FI> QueryBuilder<'i, 'c, FI>
         QueryBuilder {
             index: self.index,
             criteria: self.criteria,
-            searchable_attrs: self.searchable_attrs,
+            attributes_map: self.attributes_map,
             filter: Some(function)
         }
     }
@@ -104,9 +139,8 @@ impl<'i, 'c, FI> QueryBuilder<'i, 'c, FI>
         }
     }
 
-    pub fn add_searchable_attribute(&mut self, attribute: u16) {
-        let attributes = self.searchable_attrs.get_or_insert_with(HashSet::new);
-        attributes.insert(attribute);
+    pub fn add_searchable_attribute(&mut self, attribute: u16) -> bool {
+        self.attributes_map.get_or_insert_with(AttributesMap::new).add(attribute)
     }
 
     fn query_all(&self, query: &str) -> Vec<RawDocument> {
@@ -133,18 +167,21 @@ impl<'i, 'c, FI> QueryBuilder<'i, 'c, FI>
                 let doc_indexes = &doc_indexes[iv.value as usize];
 
                 for di in doc_indexes {
-                    if self.searchable_attrs.as_ref().map_or(true, |r| r.contains(&di.attribute)) {
-                        let match_ = Match {
-                            query_index: iv.index as u32,
-                            distance: distance,
-                            attribute: di.attribute,
-                            word_index: di.word_index,
-                            is_exact: is_exact,
-                            char_index: di.char_index,
-                            char_length: di.char_length,
-                        };
-                        matches.push((di.document_id, match_));
-                    }
+                    let attribute = match &self.attributes_map {
+                        Some(map) => map.get_new(di.attribute).unwrap_or(di.attribute),
+                        None => di.attribute,
+                    };
+
+                    let match_ = Match {
+                        query_index: iv.index as u32,
+                        distance: distance,
+                        attribute: attribute,
+                        word_index: di.word_index,
+                        is_exact: is_exact,
+                        char_index: di.char_index,
+                        char_length: di.char_length,
+                    };
+                    matches.push((di.document_id, match_));
                 }
             }
         }
@@ -207,8 +244,22 @@ where FI: Fn(DocumentId) -> bool,
         }
 
         let offset = cmp::min(documents.len(), range.start);
-        let iter = documents.into_iter().skip(offset).take(range.len());
-        iter.map(|d| Document::from_raw(&d)).collect()
+        documents.into_iter()
+            .skip(offset)
+            .take(range.len())
+            .map(|d| {
+                let mut document = Document::from_raw(&d);
+
+                // remap the attributes to their initial value
+                if let Some(attributes_map) = &self.attributes_map {
+                    for match_ in &mut document.matches {
+                        match_.attribute = attributes_map.get_old(match_.attribute).unwrap();
+                    }
+                }
+
+                document
+            })
+            .collect()
     }
 }
 
@@ -230,8 +281,8 @@ impl<'i, 'c, FI, FD> DistinctQueryBuilder<'i, 'c, FI, FD>
         }
     }
 
-    pub fn add_searchable_attribute(&mut self, attribute: u16) {
-        self.inner.add_searchable_attribute(attribute);
+    pub fn add_searchable_attribute(&mut self, attribute: u16) -> bool {
+        self.inner.add_searchable_attribute(attribute)
     }
 }
 
@@ -334,7 +385,16 @@ where FI: Fn(DocumentId) -> bool,
                 };
 
                 if distinct_accepted && seen.len() > range.start {
-                    out_documents.push(Document::from_raw(&document));
+                    let mut document = Document::from_raw(&document);
+
+                    // remap the attributes to their initial value
+                    if let Some(attributes_map) = &self.inner.attributes_map {
+                        for match_ in &mut document.matches {
+                            match_.attribute = attributes_map.get_old(match_.attribute).unwrap();
+                        }
+                    }
+
+                    out_documents.push(document);
                     if out_documents.len() == range.len() { break }
                 }
             }
