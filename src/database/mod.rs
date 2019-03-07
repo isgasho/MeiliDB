@@ -120,8 +120,10 @@ fn merge_indexes(existing: Option<&[u8]>, operands: &mut MergeOperands) -> Vec<u
     use self::update::ReadIndexEvent::{self, *};
     use self::update::WriteIndexEvent;
 
+    let operands: Vec<_> = operands.collect();
+
     let mut index = Index::default();
-    for bytes in operands.chain(existing.into_iter()) { // FIXME in other functions
+    for bytes in existing.into_iter().chain(operands.into_iter().rev()) { // FIXME in other functions
         match ReadIndexEvent::from_bytes(bytes.to_vec()).unwrap() {
             RemovedDocuments(d) => index = index.remove_documents(d.as_ref()),
             UpdatedDocuments(i) => index = index.union(&i),
