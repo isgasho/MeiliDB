@@ -121,7 +121,7 @@ fn merge_indexes(existing: Option<&[u8]>, operands: &mut MergeOperands) -> Vec<u
     use self::update::WriteIndexEvent;
 
     let mut index = Index::default();
-    for bytes in existing.into_iter().chain(operands) {
+    for bytes in operands.chain(existing.into_iter()) { // FIXME in other functions
         match ReadIndexEvent::from_bytes(bytes.to_vec()).unwrap() {
             RemovedDocuments(d) => index = index.remove_documents(d.as_ref()),
             UpdatedDocuments(i) => index = index.union(&i),
@@ -136,7 +136,7 @@ fn merge_ranked_maps(existing: Option<&[u8]>, operands: &mut MergeOperands) -> V
     use self::update::WriteRankedMapEvent;
 
     let mut ranked_map = RankedMap::default();
-    for bytes in operands.chain(existing.into_iter()) {
+    for bytes in existing.into_iter().chain(operands) {
         match ReadRankedMapEvent::from_bytes(bytes.to_vec()).unwrap() {
             RemovedDocuments(d) => ranked_map.retain(|(k, _), _| !d.as_ref().binary_search(k).is_ok()),
             UpdatedDocuments(i) => ranked_map.extend(i),
