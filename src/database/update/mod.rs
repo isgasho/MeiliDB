@@ -113,7 +113,7 @@ impl RawUpdateBuilder {
             let mut document_ids: Vec<_> = self.documents_update.into_iter().collect();
 
             document_ids.sort_unstable();
-            info!("removed_documents: {:?}", document_ids);
+            info!("build removed_documents: {:?}", document_ids);
             let setbuf = SetBuf::new_unchecked(document_ids);
             DocIds::new(&setbuf)
         };
@@ -123,6 +123,7 @@ impl RawUpdateBuilder {
             let mut builder = IndexBuilder::new();
             for (key, mut indexes) in self.indexed_words {
                 indexes.sort_unstable();
+                info!("build insert {:?} {:?}", key, indexes);
                 let indexes = Set::new_unchecked(&indexes);
                 builder.insert(key, indexes).unwrap();
             }
