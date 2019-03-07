@@ -29,6 +29,8 @@ impl Index {
         while let Some((key, indexes)) = stream.next() {
             buffer.clear();
 
+            info!("before diff between {:?} and {:?}", indexes, documents);
+
             let op = DifferenceByKey::new(indexes, documents, |x| x.document_id, |x| *x);
             op.extend_vec(&mut buffer);
 
