@@ -120,15 +120,8 @@ fn merge_indexes(existing: Option<&[u8]>, operands: &mut MergeOperands) -> Vec<u
     use self::update::ReadIndexEvent::{self, *};
     use self::update::WriteIndexEvent;
 
-    let mut index = match existing {
-        Some(bytes) => match ReadIndexEvent::from_bytes(bytes.to_vec()).unwrap() {
-            UpdatedDocuments(index) => index,
-            RemovedDocuments(_) => unreachable!(),
-        },
-        None => Index::default(),
-    };
-
-    for bytes in operands {
+    let mut index = Index::default();
+    for bytes in existing.into_iter().chain(operands) {
         match ReadIndexEvent::from_bytes(bytes.to_vec()).unwrap() {
             RemovedDocuments(d) => index = index.remove_documents(d.as_ref()),
             UpdatedDocuments(i) => index = index.union(&i),
@@ -277,6 +270,8 @@ impl DatabaseIndex {
         options.set_sync(true);
 
         self.db.write_opt(batch, &options)?;
+
+        info!("before compaction");
 
         self.db.compact_range(None, None);
         self.db.flush(true)?;
