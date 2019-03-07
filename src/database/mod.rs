@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::ops::{Deref, DerefMut};
 
-use rocksdb::rocksdb_options::{DBOptions, ColumnFamilyOptions};
+use rocksdb::rocksdb_options::{DBOptions, WriteOptions, ColumnFamilyOptions};
 use rocksdb::rocksdb::{Writable, Snapshot};
 use rocksdb::{DB, MergeOperands};
 use size_format::SizeFormatterBinary;
@@ -265,7 +265,12 @@ impl DatabaseIndex {
 
     fn commit_update(&self, update: Update) -> Result<Arc<DatabaseView<Arc<DB>>>, Box<Error>> {
         let batch = update.build()?;
-        self.db.write(batch)?;
+
+        let mut options = WriteOptions::new();
+        options.set_sync(true);
+
+        self.db.write_opt(batch, &options)?;
+
         self.db.compact_range(None, None);
         self.db.flush(true)?;
 
