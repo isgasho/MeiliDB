@@ -201,7 +201,7 @@ impl DatabaseIndex {
         // opts.error_if_exists(true); // FIXME pull request that
 
         let mut cf_opts = ColumnFamilyOptions::new();
-        cf_opts.add_merge_operator("data merge operator", merge_operator);
+        cf_opts.add_merge_operators("data merge operator", merge_operator, None);
 
         let db = DB::open_cf(opts, &path_lossy, vec![("default", cf_opts)])?;
 
@@ -228,7 +228,7 @@ impl DatabaseIndex {
         opts.create_if_missing(false);
 
         let mut cf_opts = ColumnFamilyOptions::new();
-        cf_opts.add_merge_operator("data merge operator", merge_operator);
+        cf_opts.add_merge_operators("data merge operator", merge_operator, None);
 
         let db = DB::open_cf(opts, &path_lossy, vec![("default", cf_opts)])?;
 
