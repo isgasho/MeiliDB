@@ -1,0 +1,13 @@
+[package]
+name = "meilidb-search"
+version = "0.1.0"
+authors = ["Quentin de Quelen <quentin@dequelen.me>"]
+edition = "2018"
+
+[dependencies]
+log = "0.4.6"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] }
+meilidb = { path = "../meilidb", version = "0.3.1" }
+meilidb-core = { path = "../meilidb-core", version = "0.1.0" }

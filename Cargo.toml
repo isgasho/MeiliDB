@@ -2,6 +2,8 @@
 members = [
     "meilidb",
     "meilidb-core",
+    "meilidb-http",
+    "meilidb-search",
     "meilidb-tokenizer",
 ]
 

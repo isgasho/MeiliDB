@@ -16,19 +16,18 @@ use lockfree::map::Map;
 use hashbrown::HashMap;
 use log::{info, error, warn};
 
-use crate::database::schema::SchemaAttr;
 use meilidb_core::shared_data_cursor::FromSharedDataCursor;
 use meilidb_core::write_to_bytes::WriteToBytes;
 use meilidb_core::{Index, DocumentId};
 
 use self::update::{ReadIndexEvent, ReadRankedMapEvent};
 
-pub use self::config::Config;
+pub use self::config::{Config, RankingOrdering};
 pub use self::document_key::{DocumentKey, DocumentKeyAttr};
 pub use self::view::{DatabaseView, DocumentIter};
 pub use self::update::Update;
 pub use self::serde::SerializerError;
-pub use self::schema::Schema;
+pub use self::schema::{Schema, SchemaAttr, SchemaBuilder};
 pub use self::number::{Number, ParseNumberError};
 
 pub type RankedMap = HashMap<(DocumentId, SchemaAttr), Number>;

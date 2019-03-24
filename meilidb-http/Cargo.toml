@@ -1,0 +1,30 @@
+[package]
+name = "meilidb-http"
+version = "0.1.0"
+authors = ["Quentin de Quelen <quentin@dequelen.me>"]
+edition = "2018"
+
+[dependencies]
+env_logger = "0.6"
+envconfig = "0.5"
+envconfig_derive = "0.5"
+hostname = "0.1"
+jemallocator = "0.1"
+lockfree = "0.5"
+log = "0.4.6"
+meilidb = { path = "../meilidb", version = "0.3.1" }
+meilidb-search = { path = "../meilidb-search", version = "0.1.0" }
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] }
+structopt = "0.2"
+
+[dependencies.rocket]
+git = "https://github.com/meilisearch/Rocket"
+version = "0.4.0"
+
+[dependencies.rocket_contrib]
+git = "https://github.com/meilisearch/Rocket"
+version = "0.4.0"
+default-features = true
+features = ["json"]
